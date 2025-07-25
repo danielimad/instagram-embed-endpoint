@@ -1,29 +1,36 @@
-// pages/api/instagram.js
 export default async function handler(req, res) {
-  const { username = "instagram", count = 6 } = req.query;
-  const url = `https://www.instagram.com/${username}/?__a=1&__d=dis`;
+  const { username, count } = req.query;
+  const limit = parseInt(count, 10) || 6;
 
-  let json;
-  try {
-    const r = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-      }
-    });
-    json = await r.json();
-  } catch (e) {
-    return res
-      .status(500)
-      .send("Failed to fetch Instagram JSON: " + e.message);
+  if (!username) {
+    res.status(400).json({ error: 'Missing username parameter' });
+    return;
   }
 
-  // Grab the first `count` posts
-  const edges = json.graphql.user.edge_owner_to_timeline_media.edges || [];
-  const posts = edges.slice(0, count).map(e => ({
-    permalink: `https://www.instagram.com/p/${e.node.shortcode}/`
-  }));
+  const url = `https://www.instagram.com/${username}/?__a=1&__d=dis`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Instagram data: ${response.status}`);
+    }
+    const data = await response.json();
+    let edges =
+      data?.graphql?.user?.edge_owner_to_timeline_media?.edges ||
+      data?.data?.user?.edge_owner_to_timeline_media?.edges ||
+      [];
+    const posts = edges.slice(0, limit).map(({ node }) => ({
+      permalink: `https://www.instagram.com/p/${node.shortcode}/`
+    }));
 
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.status(200).json({ posts });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.status(200).json({ posts });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 }
